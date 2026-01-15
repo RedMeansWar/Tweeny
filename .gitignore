@@ -1,0 +1,20 @@
+[Aa]p[Pp][Dd][Aa][Tt][Aa]/
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]in/
+[Bb]uild/
+[Dd]ist/
+
+# IDE files
+.vs/
+.idea/
+.vscode/
+*.suo
+*.user
+*.userprefs
+*.sln.docstates
+
+# OS generated files
+.DS_Store
+Thumbs.db
