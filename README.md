@@ -21,6 +21,7 @@ A modern, powerful, and feature-rich tweening library for C# and Unity. Based on
 - ♻️ **Restart()** - Replay without recreating the tween
 - 🎭 **Yoyo Mode** - Smooth back-and-forth motion
 - 🔗 **Sequences** - Chain multiple tweens to play one after another
+- 🛤️ **Path Tweening** - Follow straight-line paths through multiple waypoints
 - ✅ **IsComplete Property** - Quick check if tween is done
 - 🎯 **Static Helpers** - Clean one-liner tween creation with `TweenExtensions.To()`
 - 🎨 **Dynamic Easing** - Change easing function mid-tween with `SetEase()`
@@ -88,6 +89,7 @@ TweenExtensions.To(
 
 ### Sequences
 - `TweenSequence` - Chain multiple tweens together
+- `PathTween<T>` - Follow a path through multiple waypoints
 
 ### Custom Types
 
@@ -269,6 +271,49 @@ var sequence = TweenExtensions.Sequence()
 sequence.Update(deltaTime);
 ```
 
+### Path Tweening
+
+Move through multiple points with straight-line interpolation:
+
+```csharp
+// Simple float path
+TweenExtensions.Path(
+    new float[] { 0f, 50f, 25f, 100f, 0f },
+    5f,
+    value => Console.WriteLine(value),
+    Ease.Linear
+);
+
+#if UNITY_5_3_OR_NEWER
+// Unity Vector3 path (waypoints)
+Vector3[] waypoints = new Vector3[]
+{
+    new Vector3(0, 0, 0),
+    new Vector3(5, 2, 0),
+    new Vector3(10, 0, 0),
+    new Vector3(10, 0, 5)
+};
+
+TweenExtensions.Path(
+    waypoints,
+    5f,
+    pos => transform.position = pos,
+    Ease.Linear  // Linear = constant speed
+);
+
+// Manual path building
+var path = new PathTween<Vector3>(Vector3.Lerp);
+path
+    .AddPoint(Vector3.zero)
+    .AddPoint(Vector3.up * 5f)
+    .AddPoint(Vector3.right * 5f)
+    .AddPoint(Vector3.forward * 5f)
+    .OnUpdated(pos => transform.position = pos)
+    .OnCompleted(() => Debug.Log("Path complete!"))
+    .Start(4f, Ease.SineInOut);
+#endif
+```
+
 ### Callbacks
 
 ```csharp
@@ -403,6 +448,42 @@ var sequence = TweenExtensions.Sequence()
     .Start();
 ```
 
+### Path Following
+
+```csharp
+// Move through waypoints
+Vector3[] waypoints = new Vector3[]
+{
+    new Vector3(0, 0, 0),
+    new Vector3(5, 2, 0),
+    new Vector3(10, 0, 0),
+    new Vector3(10, 0, 5),
+    new Vector3(0, 0, 5)
+};
+
+TweenExtensions.Path(
+    waypoints,
+    5f,
+    pos => transform.position = pos,
+    Ease.Linear  // Constant speed along path
+);
+
+// Create circular path
+var circle = new PathTween<Vector3>(Vector3.Lerp);
+for (int i = 0; i <= 16; i++)
+{
+    float angle = (i / 16f) * Mathf.PI * 2f;
+    circle.AddPoint(new Vector3(
+        Mathf.Cos(angle) * 5f,
+        0,
+        Mathf.Sin(angle) * 5f
+    ));
+}
+circle
+    .OnUpdated(pos => transform.position = pos)
+    .Start(4f, Ease.Linear);
+```
+
 ## 🔧 Tween Manager Pattern
 
 Manage multiple tweens efficiently:
@@ -508,6 +589,7 @@ public class TweenManager
 | Restart | ❌ | ✅ |
 | Reverse | ❌ | ✅ |
 | Sequences | ❌ | ✅ |
+| Path Tweening | ❌ | ✅ |
 | Yoyo Mode | ❌ | ✅ |
 | Method Chaining | ❌ | ✅ |
 | Static Helpers | ❌ | ✅ |

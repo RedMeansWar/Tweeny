@@ -1108,6 +1108,187 @@ namespace Tweeny
     }
 
     /// <summary>
+    /// Represents a tween that follows a path through multiple points.
+    /// </summary>
+    /// <typeparam name="T">The type of values along the path.</typeparam>
+    public class PathTween<T> : ITween where T : struct
+    {
+        private readonly Func<T, T, float, T> _lerp;
+        private readonly List<T> _points = new List<T>();
+        private Func<float, float> _ease;
+        private float _timeScale = 1f;
+        private float _currentTime;
+        private float _duration;
+
+        /// <summary>Gets the current value along the path.</summary>
+        public T CurrentValue { get; private set; }
+
+        /// <summary>Gets the current state of the path tween.</summary>
+        public TweenState State { get; private set; } = TweenState.Stopped;
+
+        /// <summary>Gets whether the path tween has completed.</summary>
+        public bool IsComplete => State == TweenState.Stopped && _currentTime >= _duration;
+
+        /// <summary>Gets or sets the time scale for this path tween.</summary>
+        public float TimeScale
+        {
+            get => _timeScale;
+            set => _timeScale = Math.Max(0, value);
+        }
+
+        /// <summary>Gets or sets the normalized progress (0-1) along the entire path.</summary>
+        public float Progress
+        {
+            get => _duration > 0 ? _currentTime / _duration : 0;
+            set
+            {
+                _currentTime = Math.Clamp(value, 0f, 1f) * _duration;
+                UpdateValue();
+            }
+        }
+
+        /// <summary>Called when the path tween completes.</summary>
+        public event Action OnComplete;
+
+        /// <summary>Called on each update with the current value.</summary>
+        public event Action<T> OnUpdate;
+
+        /// <summary>
+        /// Initializes a new path tween.
+        /// </summary>
+        /// <param name="lerpFunc">The interpolation function.</param>
+        public PathTween(Func<T, T, float, T> lerpFunc)
+        {
+            _lerp = lerpFunc ?? throw new ArgumentNullException(nameof(lerpFunc));
+        }
+
+        /// <summary>
+        /// Adds a point to the path.
+        /// </summary>
+        /// <param name="point">The point to add.</param>
+        /// <returns>This path tween for method chaining.</returns>
+        public PathTween<T> AddPoint(T point)
+        {
+            _points.Add(point);
+            return this;
+        }
+
+        /// <summary>
+        /// Starts the path tween.
+        /// </summary>
+        /// <param name="duration">Total duration to traverse the entire path.</param>
+        /// <param name="easeFunc">Optional easing function.</param>
+        /// <returns>This path tween for method chaining.</returns>
+        public PathTween<T> Start(float duration, Func<float, float> easeFunc = null)
+        {
+            if (_points.Count < 2)
+                throw new InvalidOperationException("Path must have at least 2 points");
+            if (duration <= 0)
+                throw new ArgumentException("Duration must be > 0", nameof(duration));
+
+            _duration = duration;
+            _ease = easeFunc ?? Ease.Linear;
+            _currentTime = 0;
+            State = TweenState.Running;
+            UpdateValue();
+            return this;
+        }
+
+        /// <summary>
+        /// Updates the path tween.
+        /// </summary>
+        public void Update(float deltaTime)
+        {
+            if (State != TweenState.Running)
+                return;
+
+            _currentTime += deltaTime * _timeScale;
+
+            if (_currentTime >= _duration)
+            {
+                _currentTime = _duration;
+                State = TweenState.Stopped;
+                UpdateValue();
+                OnUpdate?.Invoke(CurrentValue);
+                OnComplete?.Invoke();
+            }
+            else
+            {
+                UpdateValue();
+                OnUpdate?.Invoke(CurrentValue);
+            }
+        }
+
+        private void UpdateValue()
+        {
+            float t = _currentTime / _duration;
+            t = _ease(t);
+
+            // Map t (0-1) across all segments
+            float segmentLength = 1f / (_points.Count - 1);
+            int segmentIndex = Math.Min((int)(t / segmentLength), _points.Count - 2);
+            float segmentT = (t - segmentIndex * segmentLength) / segmentLength;
+
+            CurrentValue = _lerp(_points[segmentIndex], _points[segmentIndex + 1], segmentT);
+        }
+
+        public void Stop(StopBehavior behavior)
+        {
+            State = TweenState.Stopped;
+            if (behavior == StopBehavior.ForceComplete)
+            {
+                _currentTime = _duration;
+                UpdateValue();
+                OnComplete?.Invoke();
+            }
+        }
+
+        public void Pause()
+        {
+            if (State == TweenState.Running)
+                State = TweenState.Paused;
+        }
+
+        public void Resume()
+        {
+            if (State == TweenState.Paused)
+                State = TweenState.Running;
+        }
+
+        public void Restart()
+        {
+            _currentTime = 0;
+            State = TweenState.Running;
+            UpdateValue();
+        }
+
+        public void Reverse()
+        {
+            _points.Reverse();
+            _currentTime = _duration - _currentTime;
+            UpdateValue();
+        }
+
+        /// <summary>
+        /// Registers a callback for updates.
+        /// </summary>
+        public PathTween<T> OnUpdated(Action<T> callback)
+        {
+            OnUpdate += callback;
+            return this;
+        }
+
+        /// <summary>
+        /// Registers a callback for completion.
+        /// </summary>
+        public PathTween<T> OnCompleted(Action callback)
+        {
+            OnComplete += callback;
+            return this;
+        }
+    }
+
+    /// <summary>
     /// Static helper methods for creating tweens with a cleaner API.
     /// </summary>
     public static class TweenExtensions
@@ -1138,6 +1319,27 @@ namespace Tweeny
             return To(from, currentValue, duration, onUpdate, ease);
         }
 
+        /// <summary>
+        /// Creates a path tween that follows multiple float values.
+        /// </summary>
+        /// <param name="points">The points along the path.</param>
+        /// <param name="duration">Total duration to traverse the path.</param>
+        /// <param name="onUpdate">Callback for each update.</param>
+        /// <param name="ease">Optional easing function.</param>
+        /// <returns>The created path tween.</returns>
+        public static PathTween<float> Path(float[] points, float duration, Action<float> onUpdate, Func<float, float> ease = null)
+        {
+            var tween = new PathTween<float>((s, e, p) => s + (e - s) * p);
+            foreach (var point in points)
+                tween.AddPoint(point);
+            
+            if (onUpdate != null)
+                tween.OnUpdated(onUpdate);
+            
+            tween.Start(duration, ease);
+            return tween;
+        }
+
         #if UNITY_5_3_OR_NEWER
         /// <summary>
         /// Creates and starts a Vector3 tween.
@@ -1160,6 +1362,43 @@ namespace Tweeny
             if (onUpdate != null)
                 tween.OnUpdated(onUpdate);
             tween.Start(from, to, duration, ease);
+            return tween;
+        }
+
+        /// <summary>
+        /// Creates a path tween for Vector3 positions.
+        /// </summary>
+        /// <param name="points">The waypoints along the path.</param>
+        /// <param name="duration">Total duration to traverse the path.</param>
+        /// <param name="onUpdate">Callback for each update.</param>
+        /// <param name="ease">Optional easing function.</param>
+        /// <returns>The created path tween.</returns>
+        public static PathTween<Vector3> Path(Vector3[] points, float duration, Action<Vector3> onUpdate, Func<float, float> ease = null)
+        {
+            var tween = new PathTween<Vector3>(Vector3.Lerp);
+            foreach (var point in points)
+                tween.AddPoint(point);
+            
+            if (onUpdate != null)
+                tween.OnUpdated(onUpdate);
+            
+            tween.Start(duration, ease);
+            return tween;
+        }
+
+        /// <summary>
+        /// Creates a path tween for Vector2 positions.
+        /// </summary>
+        public static PathTween<Vector2> Path(Vector2[] points, float duration, Action<Vector2> onUpdate, Func<float, float> ease = null)
+        {
+            var tween = new PathTween<Vector2>(Vector2.Lerp);
+            foreach (var point in points)
+                tween.AddPoint(point);
+            
+            if (onUpdate != null)
+                tween.OnUpdated(onUpdate);
+            
+            tween.Start(duration, ease);
             return tween;
         }
         #endif
