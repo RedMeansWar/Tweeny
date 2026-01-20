@@ -2,6 +2,7 @@
 //
 // Example usage of the Tweeny library demonstrating all features
 
+using System;
 using Tweeny;
 
 #if UNITY_5_3_OR_NEWER
@@ -526,6 +527,156 @@ namespace TweenyExamples
                 tween.Update(0.016f);
             }
         }
+
+        /// <summary>
+        /// Path tweening example - move through multiple points
+        /// </summary>
+        public static void PathTweeningExample()
+        {
+            // Create a path through multiple float values
+            var path = TweenExtensions.Path(
+                new float[] { 0f, 50f, 25f, 100f, 0f },
+                5f,
+                value => Console.WriteLine($"Path value: {value}"),
+                Ease.Linear
+            );
+
+            // Or build it manually
+            var manualPath = new PathTween<float>((s, e, p) => s + (e - s) * p);
+            manualPath
+                .AddPoint(0f)
+                .AddPoint(100f)
+                .AddPoint(50f)
+                .AddPoint(75f)
+                .OnUpdated(v => Console.WriteLine($"Value: {v}"))
+                .OnCompleted(() => Console.WriteLine("Path complete!"))
+                .Start(3f, Ease.SineInOut);
+        }
+
+        #if UNITY_5_3_OR_NEWER
+        /// <summary>
+        /// Unity path tweening examples
+        /// </summary>
+        public static class UnityPathExamples
+        {
+            /// <summary>
+            /// Move object along a path of waypoints
+            /// </summary>
+            public static void MoveAlongPath(Transform transform)
+            {
+                Vector3[] waypoints = new Vector3[]
+                {
+                    new Vector3(0, 0, 0),
+                    new Vector3(5, 2, 0),
+                    new Vector3(10, 0, 0),
+                    new Vector3(10, 0, 5),
+                    new Vector3(0, 0, 5)
+                };
+
+                TweenExtensions.Path(
+                    waypoints,
+                    5f,
+                    pos => transform.position = pos,
+                    Ease.Linear  // Linear gives constant speed along path
+                );
+            }
+
+            /// <summary>
+            /// Create a circular/curved path manually
+            /// </summary>
+            public static void CircularPath(Transform transform)
+            {
+                var path = new PathTween<Vector3>(Vector3.Lerp);
+                
+                // Create points along a circle
+                int pointCount = 16;
+                float radius = 5f;
+                for (int i = 0; i < pointCount; i++)
+                {
+                    float angle = (i / (float)pointCount) * Mathf.PI * 2f;
+                    Vector3 point = new Vector3(
+                        Mathf.Cos(angle) * radius,
+                        0,
+                        Mathf.Sin(angle) * radius
+                    );
+                    path.AddPoint(point);
+                }
+                // Close the loop
+                path.AddPoint(new Vector3(radius, 0, 0));
+
+                path
+                    .OnUpdated(pos => transform.position = pos)
+                    .Start(4f, Ease.Linear);
+            }
+
+            /// <summary>
+            /// Zigzag path example
+            /// </summary>
+            public static void ZigzagPath(Transform transform)
+            {
+                var zigzag = new PathTween<Vector3>(Vector3.Lerp);
+                
+                for (int i = 0; i < 5; i++)
+                {
+                    zigzag.AddPoint(new Vector3(i * 2f, i % 2 == 0 ? 0 : 2f, 0));
+                }
+
+                zigzag
+                    .OnUpdated(pos => transform.position = pos)
+                    .Start(3f, Ease.Linear);
+            }
+
+            /// <summary>
+            /// Color gradient path
+            /// </summary>
+            public static void ColorGradientPath(SpriteRenderer renderer)
+            {
+                var colorPath = new PathTween<Color>(Color.Lerp);
+                colorPath
+                    .AddPoint(Color.red)
+                    .AddPoint(Color.yellow)
+                    .AddPoint(Color.green)
+                    .AddPoint(Color.cyan)
+                    .AddPoint(Color.blue)
+                    .AddPoint(Color.magenta)
+                    .AddPoint(Color.red)  // Loop back
+                    .OnUpdated(color => renderer.color = color)
+                    .Start(6f, Ease.Linear);
+            }
+
+            /// <summary>
+            /// Camera path following
+            /// </summary>
+            public static void CameraPath(Camera camera)
+            {
+                Vector3[] cameraPath = new Vector3[]
+                {
+                    new Vector3(0, 5, -10),
+                    new Vector3(5, 8, -8),
+                    new Vector3(10, 6, -10),
+                    new Vector3(10, 10, -5),
+                    new Vector3(0, 5, -10)
+                };
+
+                var lookAtPath = new PathTween<Vector3>(Vector3.Lerp);
+                lookAtPath
+                    .AddPoint(Vector3.zero)
+                    .AddPoint(new Vector3(5, 0, 0))
+                    .AddPoint(new Vector3(10, 0, 0));
+
+                var positionPath = TweenExtensions.Path(
+                    cameraPath,
+                    10f,
+                    pos => camera.transform.position = pos,
+                    Ease.SineInOut
+                );
+
+                lookAtPath
+                    .OnUpdated(lookAt => camera.transform.LookAt(lookAt))
+                    .Start(10f, Ease.SineInOut);
+            }
+        }
+        #endif
 
         /// <summary>
         /// Smoothstep easing examples
